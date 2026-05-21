@@ -9,6 +9,7 @@ public class UserSession implements Serializable {
     public int y; // Added for position tracking
     public long lastHeartbeat;
     public boolean isConnected = true; // Tracks if the TCP socket thread is actively bound
+    public boolean isInvisible = false; // Tracks if the player can phase through bombs/explosions
 
     public UserSession(String username, String token) {
         this.username = username;

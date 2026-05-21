@@ -11,27 +11,25 @@ public class BomberLobbyImpl extends UnicastRemoteObject implements IBomberLobby
 
     @Override
     public String login(String username) throws RemoteException {
-        // Enforce smart validation logic to support mid-match reconnection routines
-        for (UserSession active : GameServer.activePlayers.values()) {
-            if (active.username.equalsIgnoreCase(username)) {
-                // If the player is currently online, block someone else from taking their name
-                if (active.isConnected) {
-                    throw new RemoteException("Username already claimed by an active player.");
-                } else {
-                    // FIX: If they are offline, ALLOW them to reconnect!
-                    // Return their original token session key so they can snap back into their character!
-                    System.out.println("RMI Login: Recognizing reconnection request for player [" + username + "]");
-                    return active.token;
-                }
+        if (username == null || username.trim().isEmpty()) {
+            return "DUPLICATE_NAME";
+        }
+
+        // 1. Validate incoming string details against the current session database
+        for (UserSession activeUser : GameServer.activePlayers.values()) {
+            if (activeUser.username.equalsIgnoreCase(username.trim())) {
+                System.out.println("Lobby Security: Rejected duplicate registration attempt for: " + username);
+                return "DUPLICATE_NAME"; // Hand back an explicit error code flag
             }
         }
 
-        // Initial brand new registration login sequence
-        String uniqueToken = UUID.randomUUID().toString();
-        UserSession newSession = new UserSession(username, uniqueToken);
+        // 2. If the name is completely unique, proceed with standard registration
+        String uniqueToken = java.util.UUID.randomUUID().toString();
+        UserSession newSession = new UserSession(username.trim(), uniqueToken);
 
         GameServer.activePlayers.put(uniqueToken, newSession);
         System.out.println("RMI Login Success: Assigned fresh token " + uniqueToken + " to " + username);
+
         return uniqueToken;
     }
 

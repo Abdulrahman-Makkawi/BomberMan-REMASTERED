@@ -63,7 +63,7 @@ public class PlayerHandler extends Thread {
                     int tileX = Integer.parseInt(parsedSegments[2]);
                     int tileY = Integer.parseInt(parsedSegments[3]);
 
-                    // FIX: Validate authoritatively that the player exists and is ALIVE before placing a bomb
+                    // Validate authoritatively that the player exists and is ALIVE before placing a bomb
                     UserSession session = GameServer.activePlayers.get(playerToken);
                     if (session != null && session.isAlive && session.isConnected) {
                         GameEngine.processBomb(playerToken, tileX, tileY);
@@ -79,27 +79,49 @@ public class PlayerHandler extends Thread {
 
                     UserSession session = GameServer.activePlayers.get(playerToken);
                     if (session != null && session.isAlive) {
-                        int currentX = session.x;
-                        int currentY = session.y;
 
-                        int deltaX = Math.abs(targetX - currentX);
-                        int deltaY = Math.abs(targetY - currentY);
-
-                        boolean isValidDistance = (deltaX + deltaY == 1);
-                        boolean isWithinBounds = (targetX >= 0 && targetX < 15 && targetY >= 0 && targetY < 15);
                         boolean isWalkable = false;
-
-                        if (isWithinBounds) {
+                        if (targetX >= 0 && targetX < 15 && targetY >= 0 && targetY < 15) {
                             int targetTile = GameEngine.arenaGrid[targetX][targetY];
-                            isWalkable = (targetTile == 0); //if bombs transparent add: || targetTile == 3
+
+                            // Walkable if floor (0) OR Invisibility Item (5)
+                            // OR if it's a Bomb (3) AND the player has the invisible buff active!
+                            isWalkable = (targetTile == 0 || targetTile == 5 || (targetTile == 3 && session.isInvisible));
                         }
 
-                        if (isValidDistance && isWithinBounds && isWalkable) {
+                        if (isWalkable) {
                             session.x = targetX;
                             session.y = targetY;
+
+                            // --- INVISIBILITY ITEM COLLECTION ---
+                            if (GameEngine.arenaGrid[targetX][targetY] == 5) {
+                                session.isInvisible = true; // Activate phantom mode
+                                GameEngine.arenaGrid[targetX][targetY] = 0; // Clear item from map
+
+                                // Global Chat Notification
+                                String itemAlert = "BROADCAST_CHAT 👻 [LOBBY]: " + session.username + " activated Phantom Mode! (8s)";
+                                for (PlayerHandler handler : GameServer.activeHandlers.values()) {
+                                    handler.sendDirectMessage(itemAlert);
+                                }
+
+                                // Dynamic 8-Second Self-Destruct Expiration Timer Thread
+                                new Thread(() -> {
+                                    try {
+                                        Thread.sleep(8000); // Stay invisible for exactly 8 seconds
+                                        session.isInvisible = false; // Reveal player!
+
+                                        String revealAlert = "BROADCAST_CHAT 👁️ [SYSTEM]: " + session.username + " is now visible again!";
+                                        for (PlayerHandler handler : GameServer.activeHandlers.values()) {
+                                            handler.sendDirectMessage(revealAlert);
+                                        }
+                                        GameServer.broadcastGameState(); // Force network redraw
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                }).start();
+                            }
+
                             GameServer.broadcastGameState();
-                        } else {
-                            sendDirectMessage("GAME_STATE_RESET " + currentX + " " + currentY);
                         }
                     }
                 }
@@ -109,6 +131,21 @@ public class PlayerHandler extends Thread {
                         GameServer.activePlayers.get(deadToken).isAlive = false;
                     }
                     streamWriter.println("MATCH_OVER_STATE_UPDATED");
+                }
+                else if (actionCommand.equals("PLAYER_CHAT")) {
+                    // Extract everything after "PLAYER_CHAT " as the message body
+                    String messageBody = rawIncomingRequest.substring(12).trim();
+
+                    UserSession session = GameServer.activePlayers.get(associatedToken);
+                    if (session != null && !messageBody.isEmpty()) {
+                        String globalChatMessage = "BROADCAST_CHAT [" + session.username + "]: " + messageBody;
+                        System.out.println("Chat Log: " + globalChatMessage);
+
+                        // Broadcast the message down all active client socket streams
+                        for (PlayerHandler handler : GameServer.activeHandlers.values()) {
+                            handler.sendDirectMessage(globalChatMessage);
+                        }
+                    }
                 }
             }
         } catch (IOException e) {

@@ -62,8 +62,59 @@ public class GameEngine {
 
         new Thread(() -> {
             try {
-                Thread.sleep(3000);
-                explode(bombX, bombY);
+                Thread.sleep(3000); // Wait for fuse
+
+                // Authoritatively swap the bomb tile (3) into a live Explosion fire tile (9)
+                arenaGrid[bombX][bombY] = 9;
+                checkKill(bombX, bombY);
+
+                // Blow up adjacent directions up to 1 tile away
+                int[][] blastDirections = {{0,1}, {0,-1}, {1,0}, {-1,0}};
+                for (int[] dir : blastDirections) {
+                    int targetX = bombX + dir[0];
+                    int targetY = bombY + dir[1];
+
+                    if (targetX >= 0 && targetX < 15 && targetY >= 0 && targetY < 15) {
+                        int objectType = arenaGrid[targetX][targetY];
+                        if (objectType == 2) continue; // Indestructible steel pillars block fire!
+
+                        // Mark this tile as live explosion fire
+                        arenaGrid[targetX][targetY] = 9;
+                        checkKill(targetX, targetY);
+                    }
+                }
+
+                // Push out a state broadcast so clients instantly see the fire render!
+                GameServer.broadcastGameState();
+
+                // Keep the fire on screen for half a second
+                Thread.sleep(500);
+
+
+                // Clear out the fire tiles back to empty ground floor (0)
+                arenaGrid[bombX][bombY] = 0;
+                for (int[] dir : blastDirections) {
+                    int targetX = bombX + dir[0];
+                    int targetY = bombY + dir[1];
+                    if (targetX >= 0 && targetX < 15 && targetY >= 0 && targetY < 15) {
+                        if (arenaGrid[targetX][targetY] == 9) {
+
+                            // --- ITEM DROP RATIO LOGIC ---
+                            // 20% chance to drop an Invisibility item when fire clears a brick space
+                            if (Math.random() < 0.05) {
+                                arenaGrid[targetX][targetY] = 5; // Drop Invisibility Item
+                                System.out.println("Spawn System: Invisibility item spawned at (" + targetX + "," + targetY + ")");
+                            } else {
+                                arenaGrid[targetX][targetY] = 0; // standard clear to floor
+                            }
+
+                        }
+                    }
+                }
+
+                // Broadcast final clean map state layout with items included
+                GameServer.broadcastGameState();
+
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -104,17 +155,25 @@ public class GameEngine {
             try {
                 for (UserSession player : GameServer.activePlayers.values()) {
                     if (player.x == x && player.y == y && player.isAlive) {
-                        player.isAlive = false;
-                        System.out.println("Player [" + player.username + "] was caught in the blast at (" + x + ", " + y + ") and died!");
 
-                        PlayerHandler handler = GameServer.activeHandlers.get(player.token);
-                        if (handler != null) {
-                            handler.sendDirectMessage("GAME_OVER");
+                        if (player.isInvisible) {
+                            // Skip elimination completely! They are a phantom.
+                            System.out.println("Combat Log: " + player.username + " safely phased through the explosion at (" + x + ", " + y + ").");
+                        } else {
+                            // No power-up active? Execute normal kill logic
+                            player.isAlive = false;
+                            System.out.println("Player [" + player.username + "] was caught in the blast at (" + x + ", " + y + ") and died!");
+
+                            PlayerHandler handler = GameServer.activeHandlers.get(player.token);
+                            if (handler != null) {
+                                handler.sendDirectMessage("GAME_OVER");
+                            }
                         }
+
                     }
                 }
 
-                // ADD THIS: Check if the match has concluded after evaluating deaths
+                // Check if the match has concluded after evaluating deaths
                 evaluateGameStatus();
 
             } catch (Exception e) {

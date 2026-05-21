@@ -33,7 +33,8 @@ public class GameServer {
             packet.append(player.username).append(",")
                     .append(player.x).append(",")
                     .append(player.y).append(",")
-                    .append(player.isAlive).append(";");
+                    .append(player.isAlive).append(",")
+                    .append(player.isInvisible).append(";");
         }
 
         String finalPacket = packet.toString();

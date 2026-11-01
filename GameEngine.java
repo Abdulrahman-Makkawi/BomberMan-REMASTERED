@@ -84,7 +84,7 @@ public class GameEngine {
                     }
                 }
 
-                // Push out a state broadcast so clients instantly see the fire render!
+                // Broadcast the new state to all clients
                 GameServer.broadcastGameState();
 
                 // Keep the fire on screen for half a second

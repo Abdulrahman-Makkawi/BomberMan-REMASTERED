@@ -37,7 +37,7 @@ public class PlayerHandler extends Thread {
                     UserSession session = GameServer.activePlayers.get(associatedToken);
                     if (session != null) {
                         if (!session.isConnected) {
-                            // RECONNECTION ROUTINE SUCCESSFUL!
+                            // Reconnection
                             session.isConnected = true;
                             System.out.println("Reconnection verified! [" + session.username + "] has returned safely.");
                         } else {
@@ -67,7 +67,6 @@ public class PlayerHandler extends Thread {
                     UserSession session = GameServer.activePlayers.get(playerToken);
                     if (session != null && session.isAlive && session.isConnected) {
                         GameEngine.processBomb(playerToken, tileX, tileY);
-                        //streamWriter.println("CONFIRM_BOMB_PLANTED " + tileX + " " + tileY);
                     } else {
                         streamWriter.println("SERVER_ALERT_INPUT_DENIED Action blocked: You are dead or disconnected!");
                     }
